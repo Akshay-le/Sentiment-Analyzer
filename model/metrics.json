@@ -1,0 +1,7 @@
+{
+  "accuracy": 0.9059,
+  "f1_score": 0.907,
+  "n_train": 40000,
+  "n_test": 10000,
+  "features": 40000
+}

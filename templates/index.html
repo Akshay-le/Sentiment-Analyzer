@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Now Showing — Review Sentiment Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Libre+Caslon+Text:ital@0;1&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ===== Tokens ===== */
+    :root {
+      --ink: #12151c;
+      --ink-2: #191d27;
+      --cream: #f3ede2;
+      --gold: #e8b34a;
+      --gold-dim: #a5823a;
+      --velvet: #8c2f39;
+      --velvet-bright: #d5555f;
+      --line: rgba(243, 237, 226, 0.14);
+      --serif: 'Libre Caslon Text', Georgia, serif;
+      --display: 'Bebas Neue', 'Arial Narrow', sans-serif;
+      --mono: 'IBM Plex Mono', ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--ink);
+      color: var(--cream);
+      font-family: var(--serif);
+      min-height: 100vh;
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      opacity: .05;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ===== Velvet curtains (side panels) ===== */
+    .curtain {
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      width: clamp(18px, 4.5vw, 64px);
+      z-index: 5;
+      display: flex;
+      pointer-events: none;
+      box-shadow: 0 0 40px 10px rgba(0, 0, 0, 0.55);
+    }
+
+    .curtain-left {
+      left: 0;
+    }
+
+    .curtain-right {
+      right: 0;
+      flex-direction: row-reverse;
+    }
+
+    .curtain-fold {
+      flex: 1;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent 45%, rgba(0, 0, 0, 0.35) 90%),
+        linear-gradient(180deg, #3a0f16, var(--velvet) 35%, #6c1f28 60%, #3a0f16);
+    }
+
+    .curtain-fold:nth-child(odd) {
+      filter: brightness(1.08);
+    }
+
+    .curtain-fold:nth-child(even) {
+      filter: brightness(0.86);
+    }
+
+    .curtain::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 12%, transparent 88%, rgba(0, 0, 0, 0.6));
+    }
+
+    @media (max-width: 720px) {
+      .curtain {
+        width: 12px;
+      }
+    }
+
+    /* ===== Spotlight glow over the stage ===== */
+    .spotlight {
+      position: absolute;
+      left: 50%;
+      top: 40px;
+      width: 900px;
+      height: 620px;
+      transform: translateX(-50%);
+      background: radial-gradient(ellipse at 50% 0%, rgba(232, 179, 74, 0.10), rgba(232, 179, 74, 0.03) 45%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ===== Marquee header ===== */
+    .marquee {
+      position: relative;
+      padding: 34px clamp(24px, 6vw, 84px) 40px;
+      text-align: center;
+      background:
+        radial-gradient(ellipse at 50% -10%, rgba(232, 179, 74, 0.10), transparent 60%),
+        linear-gradient(180deg, var(--ink-2), var(--ink));
+      border-bottom: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .valance {
+      height: 34px;
+      margin: -34px calc(-1 * clamp(24px, 6vw, 84px)) 18px;
+      background:
+        radial-gradient(circle at 10px -6px, transparent 15px, var(--velvet) 16px),
+        var(--velvet);
+      background-size: 40px 40px, auto;
+      background-repeat: repeat-x, no-repeat;
+      border-bottom: 3px solid var(--gold-dim);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .marquee-lights {
+      height: 10px;
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .marquee-lights.bottom {
+      margin-bottom: 0;
+      margin-top: 26px;
+    }
+
+    .marquee-lights::before {
+      content: '';
+      position: absolute;
+      inset: auto;
+    }
+
+    .marquee-lights {
+      background-image: radial-gradient(circle, var(--gold) 0 3px, transparent 3.5px);
+      background-size: 26px 10px;
+      background-repeat: repeat-x;
+      width: 100%;
+      animation: bulbs 1.8s steps(2) infinite;
+      opacity: .85;
+    }
+
+    @keyframes bulbs {
+      50% {
+        opacity: .35;
+        filter: saturate(1.4);
+      }
+    }
+
+    .eyebrow {
+      font-family: var(--mono);
+      letter-spacing: .25em;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin: 0 0 14px;
+    }
+
+    .marquee-title {
+      font-family: var(--display);
+      font-size: clamp(40px, 9vw, 92px);
+      letter-spacing: .04em;
+      margin: 0;
+      line-height: .95;
+      color: var(--cream);
+      text-shadow: 0 0 26px rgba(232, 179, 74, 0.25);
+    }
+
+    .marquee-title .gap {
+      display: inline-block;
+      width: .5em;
+    }
+
+    .marquee-title span:not(.gap) {
+      display: inline-block;
+      animation: flicker 4.5s ease-in-out infinite;
+    }
+
+    .marquee-title span:nth-child(3n+1) {
+      animation-delay: .2s;
+    }
+
+    .marquee-title span:nth-child(3n+2) {
+      animation-delay: .9s;
+    }
+
+    .marquee-title span:nth-child(3n+3) {
+      animation-delay: 1.6s;
+    }
+
+    @keyframes flicker {
+
+      0%,
+      92%,
+      100% {
+        opacity: 1;
+      }
+
+      94% {
+        opacity: .4;
+      }
+
+      96% {
+        opacity: 1;
+      }
+    }
+
+    .sub {
+      font-family: var(--serif);
+      font-style: italic;
+      color: rgba(243, 237, 226, 0.7);
+      max-width: 460px;
+      margin: 16px auto 0;
+      font-size: 15px;
+    }
+
+    /* ===== Stage / layout ===== */
+    .stage {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 48px clamp(20px, 5vw, 40px) 30px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .screening-room {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 30px;
+      align-items: start;
+    }
+
+    @media (max-width: 860px) {
+      .screening-room {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ===== Script page (input) ===== */
+    .script-page {
+      background: var(--ink-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 22px 22px 20px;
+    }
+
+    .script-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .12em;
+      color: rgba(243, 237, 226, 0.55);
+    }
+
+    .script-head label {
+      flex: 1;
+      color: var(--gold);
+    }
+
+    .reel-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--velvet-bright);
+      box-shadow: 0 0 8px var(--velvet-bright);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 220px;
+      resize: vertical;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--cream);
+      font-family: var(--serif);
+      font-size: 17px;
+      line-height: 1.65;
+      border-top: 1px dashed var(--line);
+      padding-top: 14px;
+    }
+
+    textarea::placeholder {
+      color: rgba(243, 237, 226, 0.35);
+      font-style: italic;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .btn-ticket {
+      position: relative;
+      background: var(--gold);
+      color: var(--ink);
+      border: none;
+      font-family: var(--mono);
+      font-weight: 600;
+      letter-spacing: .06em;
+      font-size: 13px;
+      text-transform: uppercase;
+      padding: 13px 22px;
+      border-radius: 3px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: transform .15s ease, background .15s ease;
+    }
+
+    .btn-ticket:hover {
+      background: #f2c465;
+      transform: translateY(-1px);
+    }
+
+    .btn-ticket:active {
+      transform: translateY(0);
+    }
+
+    .btn-ticket:disabled {
+      opacity: .6;
+      cursor: progress;
+      transform: none;
+    }
+
+    .btn-reel {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--ink);
+      border-top-color: transparent;
+      display: none;
+    }
+
+    .btn-ticket.loading .btn-reel {
+      display: inline-block;
+      animation: spin .7s linear infinite;
+    }
+
+    .btn-ticket.loading .btn-label::after {
+      content: '…';
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: rgba(243, 237, 226, 0.7);
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .05em;
+      padding: 12px 16px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color .15s ease, color .15s ease;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .char-count {
+      white-space: nowrap;
+    }
+
+    .error-msg {
+      color: var(--velvet-bright);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      min-height: 18px;
+      margin: 12px 2px 0;
+    }
+
+    /* ===== Ticket (result) ===== */
+    .ticket-wrap {
+      position: sticky;
+      top: 20px;
+    }
+
+    .ticket {
+      background:
+        repeating-linear-gradient(135deg, rgba(243, 237, 226, 0.02) 0 2px, transparent 2px 14px),
+        var(--ink-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 26px 24px;
+      min-height: 360px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .ticket::before,
+    .ticket::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: var(--ink);
+      border-radius: 50%;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .ticket::before {
+      left: -9px;
+    }
+
+    .ticket::after {
+      right: -9px;
+    }
+
+    .ticket-empty {
+      margin: auto;
+      text-align: center;
+      color: rgba(243, 237, 226, 0.4);
+    }
+
+    .film-icon {
+      width: 64px;
+      height: 46px;
+      margin: 0 auto 16px;
+      border: 3px solid rgba(243, 237, 226, 0.25);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 6px;
+    }
+
+    .film-hole {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: rgba(243, 237, 226, 0.25);
+    }
+
+    .ticket-empty p {
+      margin: 0 0 4px;
+      font-size: 15px;
+    }
+
+    .ticket-empty span {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .05em;
+    }
+
+    .ticket-result {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .ticket-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .15em;
+      color: rgba(243, 237, 226, 0.5);
+    }
+
+    .ticket-eyebrow {
+      color: var(--gold);
+    }
+
+    .verdict-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .verdict-label {
+      font-family: var(--display);
+      font-size: 46px;
+      letter-spacing: .03em;
+    }
+
+    .verdict-label.is-positive {
+      color: var(--gold);
+    }
+
+    .verdict-label.is-negative {
+      color: var(--velvet-bright);
+    }
+
+    .verdict-icon {
+      font-size: 26px;
+    }
+
+    .confidence-top {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: rgba(243, 237, 226, 0.6);
+      margin-bottom: 6px;
+    }
+
+    .filmstrip-bar {
+      height: 14px;
+      border-radius: 3px;
+      background: repeating-linear-gradient(90deg, rgba(243, 237, 226, 0.08) 0 3px, transparent 3px 8px), rgba(243, 237, 226, 0.06);
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .filmstrip-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+      transition: width .7s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .split-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .split-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .split-tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .1em;
+      width: 34px;
+      text-align: center;
+      padding: 2px 0;
+      border-radius: 2px;
+    }
+
+    .split-tag.pos {
+      background: rgba(232, 179, 74, 0.18);
+      color: var(--gold);
+    }
+
+    .split-tag.neg {
+      background: rgba(213, 85, 95, 0.18);
+      color: var(--velvet-bright);
+    }
+
+    .split-track {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(243, 237, 226, 0.08);
+      overflow: hidden;
+    }
+
+    .split-fill {
+      height: 100%;
+      width: 0%;
+      transition: width .7s cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .split-fill.pos {
+      background: var(--gold);
+    }
+
+    .split-fill.neg {
+      background: var(--velvet-bright);
+    }
+
+    .split-pct {
+      font-family: var(--mono);
+      font-size: 11px;
+      width: 38px;
+      text-align: right;
+      color: rgba(243, 237, 226, 0.6);
+    }
+
+    .perforation {
+      height: 0;
+      border-top: 1px dashed rgba(243, 237, 226, 0.2);
+    }
+
+    .keywords-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .08em;
+      color: rgba(243, 237, 226, 0.5);
+      margin: 0 0 10px;
+      text-transform: uppercase;
+    }
+
+    .keyword-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+    }
+
+    .chip.positive {
+      color: var(--gold);
+      border-color: rgba(232, 179, 74, 0.4);
+    }
+
+    .chip.negative {
+      color: var(--velvet-bright);
+      border-color: rgba(213, 85, 95, 0.4);
+    }
+
+    /* ===== Stats strip ===== */
+    .stats-strip {
+      margin-top: 54px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stat {
+      padding: 22px 10px;
+      text-align: center;
+      border-left: 1px solid var(--line);
+    }
+
+    .stat:first-child {
+      border-left: none;
+    }
+
+    .stat-value {
+      display: block;
+      font-family: var(--display);
+      font-size: 30px;
+      color: var(--gold);
+      letter-spacing: .02em;
+    }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: rgba(243, 237, 226, 0.5);
+    }
+
+    @media (max-width: 620px) {
+      .stats-strip {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .stat:nth-child(3) {
+        border-left: none;
+      }
+    }
+
+    /* ===== Seat-row silhouette ===== */
+    .seat-rows {
+      max-width: 1080px;
+      margin: 54px auto 0;
+      padding: 0 20px;
+    }
+
+    .seat-row {
+      height: 16px;
+      margin-bottom: 6px;
+      background-image: radial-gradient(ellipse 8px 10px at 10px 0, var(--ink-2) 60%, transparent 62%);
+      background-size: 22px 16px;
+      background-repeat: repeat-x;
+      opacity: .8;
+    }
+
+    .seat-row:nth-child(2) {
+      margin-left: 3%;
+      margin-right: 3%;
+      opacity: .55;
+    }
+
+    .seat-row:nth-child(3) {
+      margin-left: 6%;
+      margin-right: 6%;
+      opacity: .35;
+    }
+
+    .credits {
+      text-align: center;
+      padding: 22px 10px 10px;
+      font-family: var(--display);
+      letter-spacing: .1em;
+      font-size: 18px;
+      color: var(--gold-dim);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+      .marquee-title span,
+      .marquee-lights,
+      .btn-reel {
+        animation: none !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="grain"></div>
+
+  <div class="curtain curtain-left" aria-hidden="true">
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+  </div>
+  <div class="curtain curtain-right" aria-hidden="true">
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+    <div class="curtain-fold"></div>
+  </div>
+
+  <header class="marquee">
+    <div class="valance" aria-hidden="true"></div>
+    <div class="marquee-lights" aria-hidden="true"></div>
+    <div class="marquee-inner">
+      <p class="eyebrow">Now Showing &middot; House Critic on Duty</p>
+      <h1 class="marquee-title">
+        <span>S</span><span>E</span><span>N</span><span>T</span><span>I</span><span>M</span><span>E</span><span>N</span><span>T</span>
+        <span class="gap"></span>
+        <span>A</span><span>N</span><span>A</span><span>L</span><span>Y</span><span>Z</span><span>E</span><span>R</span>
+      </h1>
+      <p class="sub">Feed it any movie review. It reads between the lines and hands back a verdict.</p>
+    </div>
+    <div class="marquee-lights bottom" aria-hidden="true"></div>
+  </header>
+
+  <main class="stage">
+
+    <div class="spotlight" aria-hidden="true"></div>
+
+    <section class="screening-room">
+      <div class="script-page">
+        <div class="script-head">
+          <span class="reel-dot"></span>
+          <label for="review">YOUR REVIEW</label>
+          <span class="char-count" id="charCount">0 characters</span>
+        </div>
+        <textarea id="review"
+          placeholder="&quot;The second act drags, but the final twenty minutes are some of the best filmmaking I've seen all year...&quot;"></textarea>
+
+        <div class="controls">
+          <button id="analyzeBtn" class="btn-ticket">
+            <span class="btn-label">Analyze Review</span>
+            <span class="btn-reel" aria-hidden="true"></span>
+          </button>
+          <button id="sampleBtn" class="btn-ghost">Try a sample</button>
+        </div>
+        <p class="error-msg" id="errorMsg"></p>
+      </div>
+
+      <div class="ticket-wrap" id="ticketWrap">
+        <div class="ticket" id="ticket">
+          <div class="ticket-empty" id="ticketEmpty">
+            <div class="film-icon" aria-hidden="true">
+              <div class="film-hole"></div>
+              <div class="film-hole"></div>
+              <div class="film-hole"></div>
+              <div class="film-hole"></div>
+            </div>
+            <p>Your verdict prints here</p>
+            <span>Enter a review and press Analyze</span>
+          </div>
+
+          <div class="ticket-result" id="ticketResult" hidden>
+            <div class="ticket-top">
+              <span class="ticket-eyebrow">VERDICT</span>
+              <span class="ticket-serial" id="ticketSerial">NO. 000001</span>
+            </div>
+
+            <div class="verdict-row">
+              <span class="verdict-label" id="verdictLabel">POSITIVE</span>
+              <span class="verdict-icon" id="verdictIcon">&#9733;</span>
+            </div>
+
+            <div class="confidence-block">
+              <div class="confidence-top">
+                <span>Confidence</span>
+                <span id="confidenceValue">0%</span>
+              </div>
+              <div class="filmstrip-bar">
+                <div class="filmstrip-fill" id="confidenceFill"></div>
+              </div>
+            </div>
+
+            <div class="split-bars">
+              <div class="split-row">
+                <span class="split-tag pos">POS</span>
+                <div class="split-track">
+                  <div class="split-fill pos" id="posFill"></div>
+                </div>
+                <span class="split-pct" id="posPct">0%</span>
+              </div>
+              <div class="split-row">
+                <span class="split-tag neg">NEG</span>
+                <div class="split-track">
+                  <div class="split-fill neg" id="negFill"></div>
+                </div>
+                <span class="split-pct" id="negPct">0%</span>
+              </div>
+            </div>
+
+            <div class="perforation" aria-hidden="true"></div>
+
+            <div class="keywords-block">
+              <p class="keywords-title">Words that swayed the verdict</p>
+              <div class="keyword-chips" id="keywordChips"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="seat-rows" aria-hidden="true">
+      <div class="seat-row"></div>
+      <div class="seat-row"></div>
+      <div class="seat-row"></div>
+    </div>
+
+    <footer class="credits">
+      <p>&mdash; end of screening &mdash;</p>
+    </footer>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>
