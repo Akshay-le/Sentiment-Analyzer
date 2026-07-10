@@ -1,100 +1,112 @@
 # Sentiment Analyzer — Movie Reviews
 
-A complete, deployable sentiment analysis web app for movie reviews.
-TF-IDF + Logistic Regression model trained on the 50,000-review IMDB
-dataset (~91% test accuracy), served with Flask, and a custom
-cinema-marquee themed UI (plain HTML/CSS/JS — no Streamlit, no
-frontend framework required).
+## What this project is
 
-## What's inside
+A full-stack web application that reads a movie review typed in by a
+user and predicts whether the sentiment is **positive** or **negative**,
+along with a confidence score and the specific words in the review that
+influenced the decision most.
 
-```
-sentiment-app/
-├── app.py                 # Flask app + /api/predict endpoint
-├── train_model.py         # Trains & saves the model (already run — model/ is included)
-├── model/
-│   ├── sentiment_model.pkl
-│   ├── vectorizer.pkl
-│   └── metrics.json
-├── templates/
-│   └── index.html
-├── static/
-│   ├── style.css
-│   └── script.js
-├── requirements.txt
-├── Procfile                # for Heroku / Render
-├── Dockerfile               # for Docker / Railway / Fly.io / Cloud Run
-└── README.md
-```
+It's a complete, self-contained machine learning project — not a demo
+wired to an external API. The model is trained from scratch on a real
+dataset, saved to disk, and served through a custom backend and
+frontend that were both built for this project.
 
-## Run it locally
+## What it does
 
-```bash
-cd sentiment-app
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+1. User types or pastes a movie review into the web interface.
+2. The review is sent to a backend API.
+3. A trained machine learning model classifies it as positive or
+   negative and returns a confidence percentage.
+4. The interface displays the verdict, a confidence bar, a
+   positive/negative probability split, and the specific words from
+   that review that pushed the model's decision one way or the other.
 
-# (Optional) retrain the model — a trained model is already committed
-# python3 train_model.py
+## Technologies used
 
-python3 app.py
-```
+| Layer | Technology |
+|---|---|
+| Language | Python 3 (backend, model training), JavaScript (frontend logic) |
+| Machine learning | scikit-learn (`TfidfVectorizer`, `LogisticRegression`) |
+| Data handling | pandas |
+| Model serialization | joblib |
+| Backend framework | Flask (Python) |
+| Production server | Gunicorn |
+| Frontend | Hand-written HTML5, CSS3, vanilla JavaScript — no frontend framework, no Streamlit |
+| Templating | Jinja2 (Flask's built-in template engine, used in `index.html`) |
+| Deployment | Docker, with support for Render, Railway, and Heroku |
 
-Open **http://127.0.0.1:5000** in your browser.
 
-For production locally:
-```bash
-gunicorn app:app --bind 0.0.0.0:5000 --workers 2
-```
 
-## How it works
+## How the model was created and trained
 
-- **Model**: `TfidfVectorizer` (unigrams + bigrams, 40k features) feeding a
-  `LogisticRegression` classifier. Trained on 40,000 reviews, tested on
-  10,000 held-out reviews → **90.6% accuracy / 0.907 F1**.
-- **API**: `POST /api/predict` with `{"review": "..."}` returns the
-  predicted label, confidence, positive/negative probability, and the
-  top words (from the review) that most influenced the verdict —
-  a simple, honest explainability layer using the model's own
-  coefficients (no black box).
-- **UI**: no template frameworks — hand-built HTML/CSS/JS styled as a
-  cinema marquee / ticket stub, fully responsive, with a loading state,
-  error states, and a "try a sample" button.
+**1. Dataset**
+The model is trained on the IMDB Movie Reviews dataset — 50,000 real
+movie reviews collected from IMDB, evenly split between 25,000
+positive and 25,000 negative examples. This is one of the standard,
+widely-used academic datasets for sentiment analysis.
 
-## Retraining on your own data
+**2. Text cleaning (preprocessing)**
+Each raw review goes through a cleaning step before it's usable:
+- HTML tags (like `<br />`, which appear in raw IMDB text) are stripped out
+- Text is lowercased
+- Punctuation and numbers are removed, leaving only words
+- Extra whitespace is collapsed
 
-`train_model.py` expects a CSV with `review` and `sentiment` columns
-(`sentiment` = `positive`/`negative`). Point `DATA_PATH` at your file and
-re-run — it will overwrite `model/sentiment_model.pkl` and
-`model/vectorizer.pkl`.
+**3. Feature extraction — TF-IDF**
+Cleaned text can't be fed directly into a machine learning model — it
+has to become numbers. This project uses **TF-IDF (Term
+Frequency–Inverse Document Frequency)** vectorization, which converts
+each review into a numeric vector representing how important each word
+(and pair of adjacent words — bigrams) is to that specific review
+relative to the whole dataset. The vectorizer keeps the 40,000 most
+informative word/phrase features and ignores common English stop words
+(like "the," "and," "is").
 
-## Deployment options
+**4. Splitting the data**
+The 50,000 reviews are split into:
+- 40,000 reviews for **training** the model
+- 10,000 reviews held out for **testing** — the model never sees these
+  during training, so they give an honest measure of real-world accuracy
 
-### Render / Railway (easiest)
-1. Push this folder to a GitHub repo.
-2. Create a new **Web Service**, connect the repo.
-3. Build command: `pip install -r requirements.txt`
-4. Start command: `gunicorn app:app --bind 0.0.0.0:$PORT`
-   (Render/Railway auto-detect this from the included `Procfile`.)
+**5. Training the classifier**
+A **Logistic Regression** model is trained on the TF-IDF vectors from
+the training set. Logistic Regression is a fast, well-understood
+linear classifier that works especially well on high-dimensional
+sparse text data like TF-IDF vectors, and — unlike more opaque models —
+its learned weights can be directly inspected, which is what powers
+the "words that swayed the verdict" feature in the UI.
 
-### Heroku
-```bash
-heroku create your-app-name
-git push heroku main
-```
-The included `Procfile` handles the start command.
+**6. Evaluating the model**
+Once trained, the model is run against the 10,000 held-out test
+reviews it has never seen, and scored:
 
-### Docker (any host: Fly.io, Cloud Run, AWS, a VPS, etc.)
-```bash
-docker build -t sentiment-app .
-docker run -p 5000:5000 sentiment-app
-```
+- **Accuracy: 90.6%**
+- **F1 Score: 0.907**
 
-### Notes for production
-- `model/` (~2 MB total) is small enough to commit directly to git — no
-  external storage or Git LFS needed.
-- The app is stateless — you can run any number of instances behind a
-  load balancer with no shared state required.
-- `app.py` reads `PORT` from the environment, so it works out of the box
-  on Render/Heroku/Railway, which inject `$PORT` automatically.
+These numbers are saved to `model/metrics.json` and represent genuine
+performance on unseen data, not just performance on the training set.
+
+**7. Saving the model**
+Two artifacts are saved to disk with `joblib`:
+- `vectorizer.pkl` — the fitted TF-IDF vectorizer (so new reviews can
+  be converted into the same numeric format the model expects)
+- `sentiment_model.pkl` — the trained Logistic Regression classifier
+
+These are loaded once when the Flask server starts, so predictions at
+request time are just a vectorize-and-predict call — fast enough for
+real-time use, with no retraining needed unless you want to.
+
+**8. Explainability**
+Because Logistic Regression assigns a learned weight to every word
+feature, the app looks up which words in a given review have the
+strongest weights (positive or negative) and surfaces the top ones in
+the UI. This isn't a separate "explainability model" — it's reading
+the same weights the classifier already uses to make its decision.
+
+
+
+
+
+are denser or more strongly weighted — a confidence score below ~80%
+is the model's own signal that a review is ambiguous.
